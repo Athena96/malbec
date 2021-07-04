@@ -4,4 +4,4 @@ import * as cdk from '@aws-cdk/core';
 import { MalbecStack } from '../lib/malbec-stack';
 
 const app = new cdk.App();
-new MalbecStack(app, 'MalbecStack');
+new MalbecStack(app, 'MalbecStack-Dev', 'dev');

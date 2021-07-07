@@ -137,10 +137,9 @@ export class MalbecService extends core.Construct {
             restApiName: 'Malbec Service'
         });
 
-        const matchesApi = api.root.addResource('matches');
+        const matchesApi = api.root.addResource('matches');        
         matchesApi.addResource('{runnerid}');
-        const matchesIntegration = new apigateway.LambdaIntegration(matchesFunction);
-        matchesApi.addMethod('GET', matchesIntegration);
+        matchesApi.addMethod('GET', new apigateway.LambdaIntegration(matchesFunction));
 
 
         const runnersApi = api.root.addResource('runners');
@@ -163,6 +162,13 @@ export class MalbecService extends core.Construct {
         addCorsOptions(timeApi);
 
         //
+        const matchesWriterQueue = new sqs.Queue(this, 'MatchesWriterQueue', {
+            queueName: stage === Stage.Prod ? MATCHING_QUEUE_NAME_PROD : MATCHING_QUEUE_NAME_DEV,
+
+            visibilityTimeout: core.Duration.seconds(900),    
+        });
+        
+        //
         const queueWriter = new lambda.Function(this, 'QueueWriter', {
             functionName: stage === Stage.Prod ? QUEUE_WRITER_FUNCTION_NAME_PROD : QUEUE_WRITER_FUNCTION_NAME_DEV,
 
@@ -172,7 +178,8 @@ export class MalbecService extends core.Construct {
             timeout: core.Duration.seconds(900),
             role: lambdaRole,
             environment: {
-              ENVIRONMENT: stage
+              ENVIRONMENT: stage,
+              QUEUE_URL: matchesWriterQueue.queueUrl
             }
         });
         queueWriter.addEventSource(new DynamoEventSource(timesTable, {
@@ -187,14 +194,6 @@ export class MalbecService extends core.Construct {
             bisectBatchOnError: true,
             retryAttempts: 3
         }));
-
-
-        //
-        const matchesWriterQueue = new sqs.Queue(this, 'MatchesWriterQueue', {
-            queueName: stage === Stage.Prod ? MATCHING_QUEUE_NAME_PROD : MATCHING_QUEUE_NAME_DEV,
-
-            visibilityTimeout: core.Duration.seconds(900),    
-        });
 
  
         //

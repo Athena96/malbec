@@ -39,6 +39,8 @@ const MATCHING_ENGINE_FUNCTION_NAME_DEV = 'MatchingEngine-dev';
 const MATCHING_QUEUE_NAME_PROD = 'MatchesWriterQueue-prod';
 const MATCHING_QUEUE_NAME_DEV = 'MatchesWriterQueue-dev';
 
+const TIMES_TABLE_INDEX_NAME = 'runner-race-index';
+
 export class MalbecService extends core.Construct {
     constructor(scope: core.Construct, id: string, stage: string) {
         super(scope, id);
@@ -90,6 +92,11 @@ export class MalbecService extends core.Construct {
             removalPolicy: core.RemovalPolicy.RETAIN,
             stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
         });
+        timesTable.addGlobalSecondaryIndex({
+            indexName: TIMES_TABLE_INDEX_NAME,
+            partitionKey: { name: 'runnerid', type: dynamodb.AttributeType.STRING },
+            sortKey:  { name: 'race', type: dynamodb.AttributeType.STRING }
+        });
 
         //
         const matchesFunction = new lambda.Function(this, 'MatchesHandler', {
@@ -101,7 +108,8 @@ export class MalbecService extends core.Construct {
             role: lambdaRole,
             environment: {
                 MATCHES_TABLE_NAME: matchesTable.tableName,
-                ENVIRONMENT: stage
+                ENVIRONMENT: stage,
+                TIMES_TABLE_INDEX: TIMES_TABLE_INDEX_NAME
             }
         });
 
@@ -147,6 +155,7 @@ export class MalbecService extends core.Construct {
         const runnersIntegration = new apigateway.LambdaIntegration(runnersFunction);
         runnersApi.addMethod('GET', runnersIntegration);
         runnersApi.addMethod('POST', runnersIntegration);
+        runnersApi.addMethod('PUT', runnersIntegration);
         runnersApi.addMethod('DELETE', runnersIntegration);
         addCorsOptions(runnersApi);
 
@@ -158,6 +167,7 @@ export class MalbecService extends core.Construct {
         const timesIntegration = new apigateway.LambdaIntegration(timesFunction);
         timeApi.addMethod('GET', timesIntegration);
         timeApi.addMethod('POST', timesIntegration);
+        timeApi.addMethod('PUT', timesIntegration);
         timeApi.addMethod('DELETE', timesIntegration);
         addCorsOptions(timeApi);
 
@@ -179,7 +189,8 @@ export class MalbecService extends core.Construct {
             role: lambdaRole,
             environment: {
               ENVIRONMENT: stage,
-              QUEUE_URL: matchesWriterQueue.queueUrl
+              QUEUE_URL: matchesWriterQueue.queueUrl,
+              RUNNERS_TABLE_NAME: runnersTable.tableName
             }
         });
         queueWriter.addEventSource(new DynamoEventSource(timesTable, {
@@ -205,7 +216,12 @@ export class MalbecService extends core.Construct {
             timeout: core.Duration.seconds(900),
             role: lambdaRole,
             environment: {
-              ENVIRONMENT: stage
+              RUNNERS_TABLE_NAME: runnersTable.tableName,
+              MATCHES_TABLE_NAME: matchesTable.tableName,
+              TIMES_TABLE_NAME: timesTable.tableName,
+              TIMES_TABLE_INDEX: TIMES_TABLE_INDEX_NAME,
+              ENVIRONMENT: stage,
+
             }
         });
 

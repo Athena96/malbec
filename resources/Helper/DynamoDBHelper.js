@@ -120,6 +120,16 @@ exports.saveRunner = async function (runner) {
     console.log(result);
 };
 
+exports.saveMatches = async function (matches) {
+    
+    var params = {
+        Item: matches,
+        TableName: process.env.MATCHES_TABLE_NAME
+    };
+    const result = await ddb.put(params).promise();
+    console.log('saveMatches: ' + JSON.stringify(result));
+}
+
 exports.saveMatchForRace = async function (existingMatches, matches, race, runner) {
     existingMatches[race] = matches;
     

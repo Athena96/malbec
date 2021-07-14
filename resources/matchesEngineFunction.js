@@ -1,7 +1,7 @@
 const { getCORSHeaders  }= require('./Helper/NetworkingHelper');
 const { getRunner } = require('./Helper/DynamoDBHelper');
 
-const { getTimeForRace, saveMatchForRace, getMatchesForRunner } = require('./Helper/DynamoDBHelper');
+const { getTimeForRace, saveMatchForRace, getMatchesForRunner, saveMatches } = require('./Helper/DynamoDBHelper');
 
 var AWS = require('aws-sdk');
 AWS.config.update({
@@ -187,9 +187,27 @@ getTopKMatches = function (times, k) {
     }
 }
 
-updateMatchesForRunner = async function (runner, newMatchingRunner) {
+updateMatchesForRunner = async function (runnerid, newMatchingRunner, matchRaceType) {
     //
     console.log('TODO: updateMatchesForRunner');
+    
+    // get matches for runner
+    // udpate matches[matcheRaceType].push(newMatchingrunner)
+    const runnersMatches = await getMatchesForRunner(runnerid);
+    
+    console.log('runnersMatches' + JSON.stringify(runnersMatches));
+    console.log('matchRaceType' + matchRaceType);
+
+    if(!runnersMatches[matchRaceType].includes(newMatchingRunner)) {
+        console.log("HERE>...");
+
+        console.log(JSON.stringify(runnersMatches));
+        runnersMatches[matchRaceType].push(newMatchingRunner);
+        
+        console.log(JSON.stringify(runnersMatches));
+        
+        await saveMatches(runnersMatches);        
+    }
 }
 
 
@@ -199,7 +217,7 @@ generateMatchesForRace = async function (runner, race, time) {
         /* 5k: [ 'runner1', 'runner2' ] */
         // empty if not matches yet: [ ]
     let originalMatchingRunners = await fetchMatchesForRunner(runner);
-    console.log('originalMatchingRunners: ' + originalMatchingRunners);
+    console.log('originalMatchingRunners: ' + JSON.stringify(originalMatchingRunners));
     // race times where
         // runnerId != me
         // race == race
@@ -214,13 +232,10 @@ generateMatchesForRace = async function (runner, race, time) {
     let newMatchingRunners = getTopKMatches(newMatchingTimes, 5);
     console.log('newMatchingRunners: ' + JSON.stringify(newMatchingRunners));
 
-    let diffRunnerMatches = newMatchingRunners.filter(x => originalMatchingRunners.indexOf(x) === -1);
-    console.log('diffRunnerMatches');
-
     // for runner in DIFF(MATCHES, NEWMATCHES)
         // ddb.update({runner.runnerId, race, myRunnerId})
-    for (const diffRunner of diffRunnerMatches) {
-        updateMatchesForRunner(diffRunner, runner.runnerid);
+    for (const newRunner of newMatchingRunners) {
+        await updateMatchesForRunner(runner.runnerid, newRunner, race);
     }
 
     return newMatchingRunners;

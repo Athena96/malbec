@@ -29,13 +29,14 @@ exports.handler = async (event) => {
     const updatingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "MODIFY";
     // const deletingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "DELETE";
 
-console.log('addingTime' + addingTime)
+    console.log('addingTime' + addingTime)
 
-console.log('updatingTime' + updatingTime)
+    console.log('updatingTime' + updatingTime)
 
-console.log('hasSufficientProfileInfo' + hasSufficientProfileInfo)
-console.log('(addingTime || updatingTime ) && (hasSufficientProfileInfo)' + (addingTime || updatingTime ) && (hasSufficientProfileInfo))
+    console.log('hasSufficientProfileInfo' + hasSufficientProfileInfo)
+    console.log('(addingTime || updatingTime ) && (hasSufficientProfileInfo)' + (addingTime || updatingTime ) && (hasSufficientProfileInfo))
 
+    // if user moves locations, update their matches.
     if ( (addingTime || updatingTime ) && (hasSufficientProfileInfo) ) {
         try {
             message['runnerid'] = message.dynamodb.NewImage.runnerid.S;

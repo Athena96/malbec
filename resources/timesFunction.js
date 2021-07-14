@@ -30,8 +30,8 @@ exports.handler = async (event) => {
                     headers: getCORSHeaders(),
                   }; 
             case "POST":
-                const time = new Time(event);
-                await saveTime(time);
+                let postedTime = JSON.parse(event.body);
+                await saveTime(postedTime);
                 return {
                     statusCode: 200,
                     body: `SUCCESS: added new time`,

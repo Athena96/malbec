@@ -15,8 +15,8 @@ exports.handler = async (event) => {
     console.log(message);
 
     // only find matches for runner when the user is UPDATED with all required fields to find a match.
-    console.log("message.dynamodb.NewImage.runnerid: " + JSON.stringify(message.dynamodb.NewImage.runnerid));
-    const runner = await getRunner(message.dynamodb.NewImage.runnerid.S);
+    const runnerid = Object.keys(message.dynamodb).includes('NewImage') ? message.dynamodb.NewImage.runnerid.S : message.dynamodb.OldImage.runnerid.S;
+    const runner = await getRunner(runnerid);
     console.log('runner: ' + JSON.stringify(runner));
 
     console.log('runner[location]: ' + runner['location']);
@@ -27,20 +27,21 @@ exports.handler = async (event) => {
 
     const addingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "INSERT";
     const updatingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "MODIFY";
-    // const deletingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "DELETE";
+    const deletingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "REMOVE";
 
     console.log('addingTime' + addingTime)
 
     console.log('updatingTime' + updatingTime)
+    console.log('updatingTime' + deletingTime)
 
     console.log('hasSufficientProfileInfo' + hasSufficientProfileInfo)
     console.log('(addingTime || updatingTime ) && (hasSufficientProfileInfo)' + (addingTime || updatingTime ) && (hasSufficientProfileInfo))
 
     // if user moves locations, update their matches.
-    if ( (addingTime || updatingTime ) && (hasSufficientProfileInfo) ) {
+    if ( (addingTime || updatingTime || deletingTime) && (hasSufficientProfileInfo) ) {
         try {
-            message['runnerid'] = message.dynamodb.NewImage.runnerid.S;
-            message['race'] = message.dynamodb.NewImage.race.S;
+            message['runnerid'] = deletingTime ? message.dynamodb.OldImage.runnerid.S : message.dynamodb.NewImage.runnerid.S;
+            message['race'] = deletingTime ? message.dynamodb.OldImage.race.S : message.dynamodb.NewImage.race.S;
             await sendMatchingRunMessage(message);
             console.log("Sent message to queue: " + JSON.stringify(message));
         

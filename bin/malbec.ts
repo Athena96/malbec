@@ -5,3 +5,4 @@ import { MalbecStack } from '../lib/malbec-stack';
 
 const app = new cdk.App();
 new MalbecStack(app, 'MalbecStack-Dev', 'dev');
+// new MalbecStack(app, 'MalbecStack-Prod', 'prod');

@@ -1,52 +1,30 @@
 const { getCORSHeaders  }= require('./Helper/NetworkingHelper');
 const { getRunner } = require('./Helper/DynamoDBHelper');
 
-const { getTimeForRace, saveMatchForRace, getMatchesForRunner, saveMatches } = require('./Helper/DynamoDBHelper');
+const { getTimeForRace, saveMatchesForRunnerRace, getMatchesForRunner } = require('./Helper/DynamoDBHelper');
 
 var AWS = require('aws-sdk');
 AWS.config.update({
     region: process.env.AWS_REGION
 });
 var ddb = new AWS.DynamoDB.DocumentClient();
+var PROCESSED = {};
 
 exports.handler = async (event) => {
     console.log("matches engine function");
     console.log(JSON.stringify(event));
     const message = JSON.parse(event.Records[0].body);
-
-    const newTime = message.dynamodb.NewImage;
-    try {
-        const runner = await getRunner(newTime.runnerid.S);
-        console.log("runner; " + JSON.stringify(runner));
-        console.log(" runner.runnerid " + runner.runnerid);
-
-        const race = newTime.race.S;
-        const addingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "INSERT";
-        const updatingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "MODIFY";
-        // const deletingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "DELETE";
+    const newTime = Object.keys(message.dynamodb).includes('NewImage') ? message.dynamodb.NewImage : message.dynamodb.OldImage;
     
-        let matches = [];
-        if (addingTime || updatingTime) {
-            const time = await getTimeForRace(runner.runnerid, race);
-            matches = await generateMatchesForRace(runner, race, time);
-        }
-        console.log("SUCCESS: " + JSON.stringify(matches));
-        console.log("write matches to DDB");
-        
-        let existingMatches = await getMatchesForRunner(runner.runnerid);
-        if (!existingMatches) {
-            existingMatches = {
-                runnerid: runner.runnerid,
-                [race]: []
-            }
-        }
-        await saveMatchForRace(existingMatches, matches, race, runner);
-        console.log("done!");
-        
+    try {
+        const runner = newTime.runnerid.S;
+        const race = newTime;
+        await processMatches(runner, race);
+        PROCESSED = {};
         
         return {
           statusCode: 200,
-          body: JSON.stringify(matches),
+          body: 'success',
           headers: getCORSHeaders(),
         };
     } catch (error) {
@@ -62,22 +40,76 @@ exports.handler = async (event) => {
 }
 
 
-// generateMatches = async function (runner) {
-//     const races = [ '5k', '10k', 'halfmarathon', 'marathon' ];
+processMatches = async function (runnerid, race) {
+    const runner = await getRunner(runnerid);
 
-//     let matches = {};
+    console.log("process runner: " + JSON.stringify(runner));
+    console.log("process race: " + JSON.stringify(race));
 
-//     for (const race of races) {
-//         const time = getTimeForRace(runner, race);
-//         matches[race] = await generateMatchesForRace(runner, race, time);
-//     }
+    let originalMatchesObject = await fetchMatchesForRunner(runner, race);
+    console.log("ORIGINAL MATCHING RUNNERS: " + JSON.stringify(originalMatchesObject));
+    let originalMatchesForRace = []
+    for (const match of originalMatchesObject[race.race.S]) {
+        originalMatchesForRace.push(match.runnerid);
+    }
 
-//     return matches;
-// };
+    let newMatchingRunners = await generateMatchesForRunnerRace(runner, race);
+    console.log("NEW MATCHING RUNNERS: " + JSON.stringify(newMatchingRunners));
+    let newMatchesForRace = []
+    for (const newMatch of newMatchingRunners) {
+        newMatchesForRace.push(newMatch.runnerid);
+    }
+
+    console.log("save new matches");
+    let updatedMatchesObject = originalMatchesObject;
+    updatedMatchesObject[race.race.S] = newMatchingRunners;
+    console.log("updatedMatchesObject: " + JSON.stringify(updatedMatchesObject));
+
+    await saveMatchesForRunnerRace(updatedMatchesObject);
+    
+    PROCESSED[runner.runnerid] = true;
+
+    // update all original matches
+    console.log("originalMatchingRunners");
+
+    console.log('originalMatchesForRace: ' + JSON.stringify(originalMatchesForRace));
+    for (const originalRunner of originalMatchesForRace) {
+        console.log("originalRunner: " + JSON.stringify(originalRunner));
+        console.log("PROCESSED[originalRunner]: " + Object.keys(PROCESSED).includes(originalRunner));
+        if (!Object.keys(PROCESSED).includes(originalRunner)) {
+            await processMatches(originalRunner, race);
+        }
+        // let originalRunnersMatches = await generateMatchesForRunnerRace(originalRunner, race);
+        // console.log(`originalRunnersMatches: ${originalRunner} : ${JSON.stringify(originalRunnersMatches)}`);
+
+        // console.log("save originalRunnersMatches");
+        // await saveMatchesForRunnerRace(originalRunner, race, originalRunnersMatches);
+    
+    }
+    
+    
+    // update all new matches
+    for (const newMatchingRunner of newMatchesForRace) {
+        console.log("newMatchingRunner: " + JSON.stringify(newMatchingRunner));
+        console.log("PROCESSED[newMatchingRunner]: " + Object.keys(PROCESSED).includes(newMatchingRunner));
+
+        if (!Object.keys(PROCESSED).includes(newMatchingRunner)) {
+            await processMatches(newMatchingRunner, race);
+        }
+        // let newRunnersMatches = await generateMatchesForRunnerRace(newMatchingRunner, race);
+        // console.log(`newRunnersMatches: ${newMatchingRunner} : ${JSON.stringify(newRunnersMatches)}`);
+
+        // console.log("save newRunnersMatches");
+        // await saveMatchesForRunnerRace(newMatchingRunner, race, newRunnersMatches);
+    
+    }
+
+}
 
 
-fetchMatchesForRunner = async function (runner) {
-    const result = await ddb.query({
+fetchMatchesForRunner = async function (runner, race) {
+    console.log(`fetchMatchesForRunner(${JSON.stringify(runner)}, ${JSON.stringify(race)})`)
+    const params = {
         TableName : process.env.MATCHES_TABLE_NAME,
         KeyConditionExpression: "#rid = :runnerIdVal",
         ExpressionAttributeNames:{
@@ -86,12 +118,18 @@ fetchMatchesForRunner = async function (runner) {
         ExpressionAttributeValues: {
             ":runnerIdVal": runner.runnerid
         }
-    }).promise();
-    console.log(result);
+    };
+    
+    console.log(JSON.stringify(params));
+
+    const result = await ddb.query(params).promise();
     if (result && result.Items && result.Items.length > 0 ) {
         return result.Items[0];
     } else {
-        return [];
+        return {
+            runnerid: runner.runnerid,
+            [race.race.S]: []
+        }
     }
 }
 
@@ -115,14 +153,11 @@ getDistanceFromLatLonInKm = function (lat1, lon1, lat2, lon2) {
 
 
 fetchMatchingTimesForRunner = async function (runner, race, time) {
-    console.log("running fetchMatchingTimesForRunner");
-    console.log("runner: " + JSON.stringify(runner));
-    console.log("runner: " + typeof runner);
-        console.log("race: " + JSON.stringify(race));
-    console.log("race: " + typeof race);
-        console.log("time: " + JSON.stringify(time));
-    console.log("time: " + typeof time);
-    
+    console.log(`fetchMatchingTimesForRunner: ${JSON.stringify(runner)}, ${JSON.stringify(race)}, ${JSON.stringify(time)}`);
+    if (!time) {
+        console.log('RETURN');
+        return [];
+    }
     const timeBuff = 120;
     const geoBuff = 120;
     let matches = [];
@@ -130,7 +165,7 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
     let key = null;
     // store runners location in times entries?
     do {
-        data = await ddb.scan({
+        const params = {
             TableName : process.env.TIMES_TABLE_NAME,
             ExpressionAttributeNames:{
                 "#rid": "runnerid",
@@ -139,33 +174,32 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
             },
             ExpressionAttributeValues: {
                 ":runnerIdVal": runner.runnerid,
-                ":raceType": race,
+                ":raceType": race.race.S,
                 ":timeValMin": time.time - timeBuff,
                 ":timeValMax": time.time + timeBuff
             },
             FilterExpression: "#rid <> :runnerIdVal AND #raceid = :raceType AND #tm > :timeValMin AND #tm < :timeValMax",
             Limit: 100,
             ExclusiveStartKey: key
-        }).promise();
+        };
+        console.log("params: " + JSON.stringify(params));
+        data = await ddb.scan(params).promise();
         if (data['Items'].length > 0) {
             matches = [...matches, ...data['Items']];
         }
         key = data.LastEvaluatedKey;
     } while (typeof data.LastEvaluatedKey != "undefined");
     
-    console.log("filter by distance");
-    console.log(JSON.stringify(matches));
     const myLat = Number(runner.coordinates.split("#")[0]);
     const myLon = Number(runner.coordinates.split("#")[1]);
     let results = []
     for (const entry of matches) {
-        console.log("ent: "  + JSON.stringify(entry));
         const otherRunner = await getRunner(entry.runnerid);
         
         const otherLat = Number(otherRunner.coordinates.split("#")[0]);
         const otherLon = Number(otherRunner.coordinates.split("#")[1]);
         const dist = getDistanceFromLatLonInKm(myLat, myLon, otherLat, otherLon);
-        console.log("DIST: " + dist);
+
         if (dist <= 5.0) {
             results.push(entry);
         }
@@ -187,57 +221,18 @@ getTopKMatches = function (times, k) {
     }
 }
 
-updateMatchesForRunner = async function (runnerid, newMatchingRunner, matchRaceType) {
-    //
-    console.log('TODO: updateMatchesForRunner');
+
+generateMatchesForRunnerRace = async function (runner, race) {
+    console.log(`generateMatchesForRunnerRace(${JSON.stringify(runner)}, ${JSON.stringify(race)})`)
+    const time = await getTimeForRace(runner.runnerid, race);
+    console.log("time: " + JSON.stringify(time));
     
-    // get matches for runner
-    // udpate matches[matcheRaceType].push(newMatchingrunner)
-    const runnersMatches = await getMatchesForRunner(runnerid);
+    let newMatchingTimes = await fetchMatchingTimesForRunner(runner, race, time);    
+    console.log("newMatchingTimes: " + JSON.stringify(newMatchingTimes));
     
-    console.log('runnersMatches' + JSON.stringify(runnersMatches));
-    console.log('matchRaceType' + matchRaceType);
-
-    if(!runnersMatches[matchRaceType].includes(newMatchingRunner)) {
-        console.log("HERE>...");
-
-        console.log(JSON.stringify(runnersMatches));
-        runnersMatches[matchRaceType].push(newMatchingRunner);
-        
-        console.log(JSON.stringify(runnersMatches));
-        
-        await saveMatches(runnersMatches);        
-    }
-}
-
-
-generateMatchesForRace = async function (runner, race, time) {
-
-    // MATCHES get my current matches for race
-        /* 5k: [ 'runner1', 'runner2' ] */
-        // empty if not matches yet: [ ]
-    let originalMatchingRunners = await fetchMatchesForRunner(runner);
-    console.log('originalMatchingRunners: ' + JSON.stringify(originalMatchingRunners));
-    // race times where
-        // runnerId != me
-        // race == race
-        // time > x && time < y
-        // location
-        // date?
-    let newMatchingTimes = await fetchMatchingTimesForRunner(runner, race, time);
-    console.log('newMatchingTimes: ' + JSON.stringify(newMatchingTimes));
-    
-    // NEWMATCHES = get runnerIds from top K
-    // MATCHES = NEWMATCHES
     let newMatchingRunners = getTopKMatches(newMatchingTimes, 5);
-    console.log('newMatchingRunners: ' + JSON.stringify(newMatchingRunners));
+    console.log("newMatchingRunners: " + JSON.stringify(newMatchingRunners));
 
-    // for runner in DIFF(MATCHES, NEWMATCHES)
-        // ddb.update({runner.runnerId, race, myRunnerId})
-    for (const newRunner of newMatchingRunners) {
-        await updateMatchesForRunner(runner.runnerid, newRunner, race);
-    }
 
     return newMatchingRunners;
-
 };

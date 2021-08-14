@@ -13,7 +13,6 @@ exports.saveTime = async function (time) {
         TableName: process.env.TIMES_TABLE_NAME
     };
     const result = await ddb.put(params).promise();
-    console.log(result);
 };
 
 exports.getTime = async function (timeid) {
@@ -27,29 +26,32 @@ exports.getTime = async function (timeid) {
             ":timeidVal": timeid
         }
     }).promise();
-    console.log(result);
     return result.Items[0];
 };
 
 exports.getTimeForRace = async function (runnerid, race) {
-    console.log("runnerid: " + runnerid);
-    console.log("race: " + race);
+    try {
+        const result = await ddb.query({
+            TableName : process.env.TIMES_TABLE_NAME,
+            IndexName: process.env.TIMES_TABLE_INDEX,
+            KeyConditionExpression: "#runid = :runneridVal and #rid = :raceVal",
+            ExpressionAttributeNames:{
+                "#runid": "runnerid",
+                "#rid": "race"
+            },
+            ExpressionAttributeValues: {
+                ":runneridVal": runnerid,
+                ":raceVal": race.race.S
+            }
+        }).promise();
 
-    const result = await ddb.query({
-        TableName : process.env.TIMES_TABLE_NAME,
-        IndexName: process.env.TIMES_TABLE_INDEX,
-        KeyConditionExpression: "#runid = :runneridVal and #rid = :raceVal",
-        ExpressionAttributeNames:{
-            "#runid": "runnerid",
-            "#rid": "race"
-        },
-        ExpressionAttributeValues: {
-            ":runneridVal": runnerid,
-            ":raceVal": race
-        }
-    }).promise();
-    console.log(result);
-    return result.Items[0];
+        return result.Items[0];
+    } catch (error) {
+        console.error(error);
+
+        return null;
+    }
+
 };
 
 exports.getTimesForRunner = async function (runnerid) {
@@ -84,7 +86,6 @@ exports.deleteTime = async function (timeid) {
             "timeid": timeid
         }
     }).promise();
-    console.log(result);
 };
 
 
@@ -100,7 +101,6 @@ exports.getMatchesForRunner = async function (runnerid) {
             ":runnerIdVal": runnerid
         }
     }).promise();
-    console.log(result);
     if (result.Items.length === 0) {
         return null;
     } else {
@@ -117,28 +117,16 @@ exports.saveRunner = async function (runner) {
         TableName: process.env.RUNNERS_TABLE_NAME
     };
     const result = await ddb.put(params).promise();
-    console.log(result);
 };
 
-exports.saveMatches = async function (matches) {
-    
-    var params = {
-        Item: matches,
-        TableName: process.env.MATCHES_TABLE_NAME
-    };
-    const result = await ddb.put(params).promise();
-    console.log('saveMatches: ' + JSON.stringify(result));
-}
 
-exports.saveMatchForRace = async function (existingMatches, matches, race, runner) {
-    existingMatches[race] = matches;
+exports.saveMatchesForRunnerRace = async function (newMatchingRunners) {
     
     var params = {
-        Item: existingMatches,
+        Item: newMatchingRunners,
         TableName: process.env.MATCHES_TABLE_NAME
     };
     const result = await ddb.put(params).promise();
-    console.log(result);
 };
 
 
@@ -155,7 +143,6 @@ exports.getRunner = async function (runnerid) {
             ":runnerIdVal": runnerid
         }
     }).promise();
-    console.log(result);
     return result.Items[0];
 };
 
@@ -166,5 +153,4 @@ exports.deleteRunner = async function (runnerid) {
             "runnerid": runnerid
         }
     }).promise();
-    console.log(result);
 };

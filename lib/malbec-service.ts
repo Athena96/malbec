@@ -213,7 +213,7 @@ export class MalbecService extends core.Construct {
             runtime: lambda.Runtime.NODEJS_12_X,
             code: lambda.Code.fromAsset('resources'),
             handler: 'matchesEngineFunction.handler',
-            timeout: core.Duration.seconds(900),
+            timeout: core.Duration.seconds(60),
             role: lambdaRole,
             environment: {
               RUNNERS_TABLE_NAME: runnersTable.tableName,

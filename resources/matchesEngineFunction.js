@@ -48,6 +48,10 @@ processMatches = async function (runnerid, race) {
 
     let originalMatchesObject = await fetchMatchesForRunner(runner, race);
     console.log("ORIGINAL MATCHING RUNNERS: " + JSON.stringify(originalMatchesObject));
+    
+    if (!Object.keys(originalMatchesObject).includes(race.race.S)) {
+        originalMatchesObject[race.race.S] = []; // adding new time.
+    }
     let originalMatchesForRace = []
     for (const match of originalMatchesObject[race.race.S]) {
         originalMatchesForRace.push(match.runnerid);

@@ -19,26 +19,17 @@ exports.handler = async (event) => {
     const runner = await getRunner(runnerid);
     console.log('runner: ' + JSON.stringify(runner));
 
-    console.log('runner[location]: ' + runner['location']);
-    console.log('runner[runnerid]: ' + runner['runnerid']);
-
-    const hasSufficientProfileInfo = runner['location'] && runner['runnerid'];
-    console.log('hasSufficientProfileInfo: ' + hasSufficientProfileInfo);
+    // const hasSufficientProfileInfo = runner['location'] && runner['runnerid'];
+    // console.log('hasSufficientProfileInfo: ' + hasSufficientProfileInfo);
 
     const addingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "INSERT";
     const updatingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "MODIFY";
     const deletingTime = message.eventSourceARN.includes("TimesTable") && message.eventName === "REMOVE";
 
-    console.log('addingTime' + addingTime)
-
-    console.log('updatingTime' + updatingTime)
-    console.log('updatingTime' + deletingTime)
-
-    console.log('hasSufficientProfileInfo' + hasSufficientProfileInfo)
-    console.log('(addingTime || updatingTime ) && (hasSufficientProfileInfo)' + (addingTime || updatingTime ) && (hasSufficientProfileInfo))
+    console.log('(addingTime || updatingTime ) && (hasSufficientProfileInfo)' + (addingTime || updatingTime ))
 
     // if user moves locations, update their matches.
-    if ( (addingTime || updatingTime || deletingTime) && (hasSufficientProfileInfo) ) {
+    if ( (addingTime || updatingTime || deletingTime) ) {
         try {
             message['runnerid'] = deletingTime ? message.dynamodb.OldImage.runnerid.S : message.dynamodb.NewImage.runnerid.S;
             message['race'] = deletingTime ? message.dynamodb.OldImage.race.S : message.dynamodb.NewImage.race.S;

@@ -164,15 +164,16 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
     }
 
     let timeBuff = 300;
-    switch(race) {
+    console.log("race.race.S: " + race.race.S);
+    switch(race.race.S) {
         case 'fivek':
-            timeBuff = 300;
+            timeBuff = 180;
             break;
         case 'tenk':
             timeBuff = 330;
             break;
         case 'halfmarathon':
-            timeBuff = 600;
+            timeBuff = 610;
             break;
         case 'marathon':
             timeBuff = 960;
@@ -181,6 +182,7 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
             timeBuff = 300;
             break;
     }
+    console.log('timeBuff: ' + timeBuff);
     const geoBuff = 120;
     let matches = [];
     let data = null;
@@ -212,8 +214,8 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
         key = data.LastEvaluatedKey;
     } while (typeof data.LastEvaluatedKey != "undefined");
     
-    const myLat = Number(runner.coordinates.split("#")[0]);
-    const myLon = Number(runner.coordinates.split("#")[1]);
+    // const myLat = Number(runner.coordinates.split("#")[0]);
+    // const myLon = Number(runner.coordinates.split("#")[1]);
     let results = []
     for (const entry of matches) {
         // const otherRunner = await getRunner(entry.runnerid);

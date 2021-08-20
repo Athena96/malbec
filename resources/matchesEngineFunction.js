@@ -162,7 +162,25 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
         console.log('RETURN');
         return [];
     }
-    const timeBuff = 120;
+
+    let timeBuff = 300;
+    switch(race) {
+        case 'fivek':
+            timeBuff = 300;
+            break;
+        case 'tenk':
+            timeBuff = 330;
+            break;
+        case 'halfmarathon':
+            timeBuff = 600;
+            break;
+        case 'marathon':
+            timeBuff = 960;
+            break;
+        default:
+            timeBuff = 300;
+            break;
+    }
     const geoBuff = 120;
     let matches = [];
     let data = null;
@@ -198,15 +216,15 @@ fetchMatchingTimesForRunner = async function (runner, race, time) {
     const myLon = Number(runner.coordinates.split("#")[1]);
     let results = []
     for (const entry of matches) {
-        const otherRunner = await getRunner(entry.runnerid);
+        // const otherRunner = await getRunner(entry.runnerid);
         
-        const otherLat = Number(otherRunner.coordinates.split("#")[0]);
-        const otherLon = Number(otherRunner.coordinates.split("#")[1]);
-        const dist = getDistanceFromLatLonInKm(myLat, myLon, otherLat, otherLon);
+        // const otherLat = Number(otherRunner.coordinates.split("#")[0]);
+        // const otherLon = Number(otherRunner.coordinates.split("#")[1]);
+        // const dist = getDistanceFromLatLonInKm(myLat, myLon, otherLat, otherLon);
 
-        if (dist <= 5.0) {
+        // if (dist <= 5.0) {
             results.push(entry);
-        }
+        // }
     }
     
     return results;
